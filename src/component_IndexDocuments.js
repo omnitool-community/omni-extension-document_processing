@@ -26,8 +26,8 @@ const inputs = [
     { name: 'documents', title: 'Documents to index', type: 'array', customSocket: 'documentArray', description: 'Documents to be indexed', allowMultiple: true },
     { name: 'text', type: 'string', title: 'Text to index', customSocket: 'text', description: 'And/or some Text to be indexed directly', allowMultiple: true  },
     { name: 'splitter_model', type: 'string', defaultValue: 'RecursiveCharacterTextSplitter', title: "Splitter Model", description: "Choosing a splitter model that matches the type of document being indexed will produce the best results", choices: getSplitterChoices()},
-    { name: 'chunk_size', type: 'number', defaultValue: 4096, minimum: 0, maximum:1000000, step:1 },
-    { name: 'chunk_overlap', type: 'number', defaultValue: 512, minimum: 0, maximum:500000, step:1 },
+    { name: 'chunk_size', type: 'number', defaultValue: 8000, minimum: 0, maximum:100000, step:1000 },
+    { name: 'chunk_overlap', type: 'number', defaultValue: 4000, minimum: 0, maximum:50000, step:500 },
     { name: 'overwrite', type: 'boolean', defaultValue: false, description: "If set to true, will overwrite existing matching documents" },
     { name: 'index', title: 'Save to Index:', type: 'string', description: "All indexed documents sharing the same index will be grouped and queried together"},
   ];

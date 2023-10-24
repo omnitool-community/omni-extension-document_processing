@@ -20,13 +20,6 @@ const DESCRIPTION = 'Answer the Query using all document in the given Index, usi
 const SUMMARY = 'Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain';
 const CATEGORY = 'document processing';
 
-const indexes_block_name = `omni-extension-document_processing:document_processing.get_documents_indexes`;
-const index_choices = {
-  "block": indexes_block_name,
-  "args": {},
-  "map": { "root": "indexes" }
-};
-
 async function async_getQueryIndexComponent()
 {
   const links = {
@@ -64,18 +57,19 @@ async function queryIndex(payload, ctx)
   const model_id = payload.model_id;
   const indexed_documents = payload.indexed_documents;
   const index = payload.index || "";
-  const context_size = payload.context_size;
+  let context_size = payload.context_size;
   const provide_citation = payload.provide_citation;
 
-  let max_size = context_size * 0.9; // we use some margin
-
+  
   if (context_size == 0) 
   {
-    const splits = getModelNameAndProviderFromId(model_id);
-    const model_name = splits.model_name;
-    max_size = getModelMaxSize(model_name, false) * 0.9; // use the same margin
+      const splits = getModelNameAndProviderFromId(model_id);
+      const model_name = splits.model_name;
+      context_size = getModelMaxSize(model_name, false) * 0.9;
   }
-  
+  const max_size = context_size * 0.9; // we use some margin
+  info += `Using a max_size of ${max_size} tokens.  \n|`;
+
   const embedder = await initializeEmbedder(ctx);
   if (!embedder) throw new Error(`Cannot initialize embedded`);
 

@@ -60,11 +60,11 @@ class Embedding_Openai extends Embeddings
         let response = null;
         try
         {
-            response = await runBlock(ctx, 'openai.embeddings', args);
+            response = await runBlock(ctx, 'openai.embedding', args);
         }
         catch (err)
         {
-            let error_message = `[OmniOpenAIEmbeddings] Error running openai.embeddings: ${err.message}`;
+            let error_message = `[OmniOpenAIEmbeddings] Error running openai.embedding: ${err.message}`;
             console.error(error_message);
             throw err;
         }

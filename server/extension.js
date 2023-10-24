@@ -7431,9 +7431,9 @@ Error: ${error}`);
     args.input = input;
     let response = null;
     try {
-      response = await runBlock(ctx, "openai.embeddings", args);
+      response = await runBlock(ctx, "openai.embedding", args);
     } catch (err) {
-      let error_message = `[OmniOpenAIEmbeddings] Error running openai.embeddings: ${err.message}`;
+      let error_message = `[OmniOpenAIEmbeddings] Error running openai.embedding: ${err.message}`;
       console.error(error_message);
       throw err;
     }
@@ -7943,8 +7943,8 @@ var inputs = [
   { name: "documents", title: "Documents to index", type: "array", customSocket: "documentArray", description: "Documents to be indexed", allowMultiple: true },
   { name: "text", type: "string", title: "Text to index", customSocket: "text", description: "And/or some Text to be indexed directly", allowMultiple: true },
   { name: "splitter_model", type: "string", defaultValue: "RecursiveCharacterTextSplitter", title: "Splitter Model", description: "Choosing a splitter model that matches the type of document being indexed will produce the best results", choices: getSplitterChoices() },
-  { name: "chunk_size", type: "number", defaultValue: 4096, minimum: 0, maximum: 1e6, step: 1 },
-  { name: "chunk_overlap", type: "number", defaultValue: 512, minimum: 0, maximum: 5e5, step: 1 },
+  { name: "chunk_size", type: "number", defaultValue: 8e3, minimum: 0, maximum: 1e5, step: 1e3 },
+  { name: "chunk_overlap", type: "number", defaultValue: 4e3, minimum: 0, maximum: 5e4, step: 500 },
   { name: "overwrite", type: "boolean", defaultValue: false, description: "If set to true, will overwrite existing matching documents" },
   { name: "index", title: "Save to Index:", type: "string", description: "All indexed documents sharing the same index will be grouped and queried together" }
 ];
@@ -8045,7 +8045,7 @@ async function async_getQueryIndexBruteforceComponent() {
     { name: "temperature", type: "number", defaultValue: 0 },
     { name: "model_id", title: "model", type: "string", defaultValue: "gpt-3.5-turbo-16k|openai", choices: llm_choices },
     { name: "index", title: "Read from Index:", type: "string", description: "All indexed documents sharing the same Index will be grouped and queried together" },
-    { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 1e5], description: "If set > 0, will concatenate document fragments to fit within that the specify token context size (with some margin)" },
+    { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 1e5], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
     { name: "llm_args", type: "object", customSocket: "object", description: "Extra arguments provided to the LLM" }
   ];
   const outputs3 = [
@@ -8065,9 +8065,14 @@ async function queryIndexBruteforce(payload, ctx) {
   const query = payload.query;
   const temperature = payload.temperature;
   const model_id = payload.model_id;
-  const context_size = payload.context_size;
+  let context_size = payload.context_size;
   const llm_args = payload.llm_args;
   let info = "";
+  if (context_size == 0) {
+    const splits = getModelNameAndProviderFromId(model_id);
+    const model_name = splits.model_name;
+    context_size = getModelMaxSize(model_name, false) * 0.9;
+  }
   const max_size = context_size * 0.9;
   info += `Using a max_size of ${max_size} tokens.  
 |`;
@@ -8138,14 +8143,18 @@ import { getLlmChoices as getLlmChoices2, is_valid as is_valid8, getModelMaxSize
 
 // smartquery.js
 import { queryLlmByModelId as queryLlmByModelId2, getModelMaxSize as getModelMaxSize2, console_log as console_log5, console_warn, is_valid as is_valid7, getModelNameAndProviderFromId as getModelNameAndProviderFromId2 } from "../../../src/utils/omni-utils.js";
-async function smartqueryFromVectorstore(ctx, vectorstore, query, embedder, model_id) {
+async function smartqueryFromVectorstore(ctx, vectorstore, query, embedder, model_id, max_size, provide_citation) {
+  let info = "";
   const splits = getModelNameAndProviderFromId2(model_id);
   const model_name = splits.model_name;
+  info += `smartquery: model_name = ${model_name}
+|  `;
   if (is_valid7(query) == false)
     throw new Error(`ERROR: query is invalid`);
   let vectorstore_responses = await queryVectorstore(vectorstore, query, 10, embedder);
   let total_tokens = 0;
-  let max_size = getModelMaxSize2(model_name) * 0.8;
+  info += `using: max_size = ${max_size}
+|  `;
   let combined_text = "";
   let text_json = [];
   const already_used_ids = {};
@@ -8155,8 +8164,11 @@ async function smartqueryFromVectorstore(ctx, vectorstore, query, embedder, mode
     console_log5(`vectorstore_responses[${i}] score = ${score}`);
     const chunk = vectorstore_response?.metadata;
     const chunk_id = chunk?.id;
-    if (already_used_ids[chunk_id] == true)
+    if (already_used_ids[chunk_id] == true) {
+      info += `already used: chunk_id = ${chunk_id}. Skipping it
+|  `;
       continue;
+    }
     already_used_ids[chunk_id] = true;
     const raw_text = vectorstore_response?.pageContent;
     const chunk_source = chunk?.source;
@@ -8166,23 +8178,45 @@ async function smartqueryFromVectorstore(ctx, vectorstore, query, embedder, mode
     if (total_tokens + token_cost > max_size)
       break;
     total_tokens += token_cost;
+    info += `processing: chunk_id = ${chunk_id}. token_cost = ${token_cost}. total_tokens = ${total_tokens}. 
+|  `;
   }
-  combined_text = JSON.stringify(text_json);
   console_warn(`combined_text = 
 ${combined_text}`);
-  const instruction = `Based on the provided document fragments, answer the user' question and provide citations to each fragment_id you use in your answer. For example, say 'Alice is married to Bob [fragment_id] and they have one son [fragment_id]`;
-  const prompt = `Document Json:
+  info += `combined_text: ${combined_text}
+|  `;
+  let instruction = "";
+  let prompt = "";
+  if (provide_citation) {
+    combined_text = JSON.stringify(text_json);
+    instruction = `Based on the provided document fragments, answer the user' question and provide citations to each fragment_id you use in your answer. For example, say 'Alice is married to Bob [fragment_id] and they have one son [fragment_id]`;
+    prompt = `Document Json:
 ${combined_text}
 User's question: ${query}`;
+  } else {
+    for (const json_entry of text_json) {
+      combined_text += json_entry.fragment_text + "\n\n";
+    }
+    instruction = `Based on the provided document fragments, answer the user' question.`;
+    prompt = `Document Json:
+${combined_text}
+User's question: ${query}`;
+  }
+  info += `provide_citation: ${provide_citation}.
+|  `;
+  info += `instruction: ${instruction}.
+|  `;
+  info += `prompt: ${prompt}.
+|  `;
   const response = await queryLlmByModelId2(ctx, prompt, instruction, model_id);
-  const answer_text = response?.answer_text || null;
-  if (is_valid7(answer_text) == false)
+  const answer = response?.answer_text || null;
+  if (is_valid7(answer) == false)
     throw new Error(`ERROR: query_answer is invalid`);
   console_warn(`instruction = 
 ${instruction}`);
   console_warn(`prompt = 
 ${prompt}`);
-  return answer_text;
+  return { answer, info };
 }
 
 // component_QueryIndex.js
@@ -8222,14 +8256,16 @@ async function queryIndex(payload, ctx) {
   const model_id = payload.model_id;
   const indexed_documents = payload.indexed_documents;
   const index = payload.index || "";
-  const context_size = payload.context_size;
+  let context_size = payload.context_size;
   const provide_citation = payload.provide_citation;
-  let max_size = context_size * 0.9;
   if (context_size == 0) {
     const splits = getModelNameAndProviderFromId3(model_id);
     const model_name = splits.model_name;
-    max_size = getModelMaxSize3(model_name, false) * 0.9;
+    context_size = getModelMaxSize3(model_name, false) * 0.9;
   }
+  const max_size = context_size * 0.9;
+  info += `Using a max_size of ${max_size} tokens.  
+|`;
   const embedder = await initializeEmbedder(ctx);
   if (!embedder)
     throw new Error(`Cannot initialize embedded`);

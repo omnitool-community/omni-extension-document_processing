@@ -28,7 +28,7 @@ async function async_getQueryIndexBruteforceComponent()
         { name: 'temperature', type: 'number', defaultValue: 0 },
         { name: 'model_id', title: 'model', type: 'string', defaultValue: 'gpt-3.5-turbo-16k|openai', choices: llm_choices },
         { name: 'index', title: 'Read from Index:', type: 'string', description: "All indexed documents sharing the same Index will be grouped and queried together" },
-        { name: 'context_size', type: 'number', defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 100000], description: "If set > 0, will concatenate document fragments to fit within that the specify token context size (with some margin)" },
+        { name: 'context_size', type: 'number', defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 100000], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
         { name: 'llm_args', type: 'object', customSocket: 'object', description: 'Extra arguments provided to the LLM'},
     ];
 
@@ -56,10 +56,17 @@ async function queryIndexBruteforce(payload, ctx)
     const query = payload.query;
     const temperature = payload.temperature;
     const model_id = payload.model_id;
-    const context_size = payload.context_size;
+    let context_size = payload.context_size;
     const llm_args = payload.llm_args;
 
     let info = "";
+
+    if (context_size == 0) 
+    {
+        const splits = getModelNameAndProviderFromId(model_id);
+        const model_name = splits.model_name;
+        context_size = getModelMaxSize(model_name, false) * 0.9;
+    }
     const max_size = context_size * 0.9; // we use some margin
     info += `Using a max_size of ${max_size} tokens.  \n|`;
 
