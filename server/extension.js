@@ -7145,6 +7145,20 @@ var TokenTextSplitter = class extends TextSplitter {
 
 // omnilib-docs/chunking.js
 import { get_cached_cdn, save_chunks_cdn_to_db, save_json_to_cdn_as_buffer, is_valid as is_valid2, console_log as console_log2 } from "../../../src/utils/omni-utils.js";
+
+// omnilib-docs/toast.js
+function makeToast(ctx, message) {
+  const app = ctx.app;
+  const user = ctx.userId;
+  const description_json = { type: "info", description: `Chunking document progress` };
+  const toast = { user, message, description_json };
+  app.sendToastToUser(user, toast);
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// omnilib-docs/chunking.js
 var DEFAULT_CHUNK_SIZE = 8092;
 var DEFAULT_CHUNK_OVERLAP = 4096;
 var EMBEDDING_BATCH_SIZE = 10;
@@ -7183,6 +7197,8 @@ function computeTokenToChunkingSizeRatio(chunks, chunk_size, chunk_overlap) {
 async function computeChunks(ctx, document_id, textBatches, hasher, embedder, tokenCounterFunction) {
   const chunks = [];
   let index = 0;
+  const length = textBatches.length;
+  let chunk_index = 0;
   for (const textBatch of textBatches) {
     const embeddingPromises = textBatch.map(async (chunk_text) => {
       const nb_of_chars = chunk_text.length;
@@ -7191,6 +7207,8 @@ async function computeChunks(ctx, document_id, textBatches, hasher, embedder, to
         await embedder.embedQuery(chunk_text);
         const chunk_token_count = tokenCounterFunction(chunk_text);
         const chunk_json = { source: document_id, index, id: chunk_id, token_count: chunk_token_count, text: chunk_text };
+        makeToast(ctx, `Created document fragment ${chunk_index + 1}/${length}`);
+        chunk_index++;
         return chunk_json;
       }
     });
@@ -8080,9 +8098,8 @@ async function queryIndexBruteforce(payload, ctx) {
   let chunk_index = 0;
   let total_token_cost = 0;
   let combined_text = "";
-  let llm_results = [];
-  let answer = "";
   const instruction = "Based on the user's prompt, answer the following question to the best of your abilities: " + query;
+  const blocks = [];
   for (const chunk of chunks) {
     const is_last_index = chunk_index == chunks.length - 1;
     const chunk_text = chunk?.text;
@@ -8095,46 +8112,46 @@ async function queryIndexBruteforce(payload, ctx) {
       info += `Combining chunks.  chunk_id: ${chunk_id}, Token cost: ${total_token_cost}.  
 |`;
     } else {
-      info += `Processing Block #${chunk_index - 1}.  
-|`;
-      const partial_result = await sendToLLM(ctx, combined_text, instruction, model_id, temperature, llm_args);
-      const text = partial_result.text;
-      llm_results.push(partial_result);
-      if (text && text.length > 0) {
-        answer += text + "   \n\n";
-        info += `Answer: ${text}.  
-|`;
-      }
+      blocks.push(combined_text);
       combined_text = chunk_text;
       total_token_cost = token_cost;
     }
     if (is_last_index) {
-      info += `Processing Block #${chunk_index}.  
-|`;
-      const partial_result = await sendToLLM(ctx, combined_text, instruction, model_id, temperature, llm_args);
-      const text = partial_result.text;
-      llm_results.push(partial_result);
-      if (text && text.length > 0) {
-        answer += text + "   \n\n";
-        info += `Answer: ${text}.  
-|`;
-      }
+      blocks.push(combined_text);
     }
     chunk_index += 1;
   }
+  makeToast(ctx, `Processing ${blocks.length} blocks`);
+  const promises = blocks.map(
+    (block_text, index2) => processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, index2 + 1, blocks.length)
+  );
+  const llm_results = await Promise.all(promises);
+  let answer = "";
+  llm_results.forEach((partial_result, index2) => {
+    const text = partial_result.text;
+    if (text && text.length > 0) {
+      answer += text + "   \n\n";
+      info += `Answer: ${text}.  
+|`;
+    }
+  });
   const json = { "answers": llm_results };
   const response = { result: { "ok": true }, answer, json, info };
   console.timeEnd("queryIndexBruteforce");
   return response;
 }
-async function sendToLLM(ctx, combined_text, instruction, model_id, temperature, llm_args) {
-  const gpt_results = await queryLlmByModelId(ctx, combined_text, instruction, model_id, temperature, llm_args);
-  const sanetized_results = sanitizeJSON(gpt_results);
+async function processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, block_index, block_count) {
+  await sleep(1e3 * block_index);
+  makeToast(ctx, `Queuing up Block #${block_index}/${block_count}`);
+  const results = await queryLlmByModelId(ctx, block_text, instruction, model_id, temperature, llm_args);
+  const sanetized_results = sanitizeJSON(results);
   const text = sanetized_results?.answer_text || "";
   const function_arguments_string = sanetized_results?.answer_json?.function_arguments_string;
   const function_arguments = sanetized_results?.answer_json?.function_arguments;
-  const result = { text, function_arguments_string, function_arguments };
-  return result;
+  makeToast(ctx, `### Received answer for Block ${block_index}/${block_count}  
+
+${text}`);
+  return { text, function_arguments_string, function_arguments };
 }
 
 // component_QueryIndex.js
@@ -8222,7 +8239,7 @@ ${prompt}`);
 // component_QueryIndex.js
 var NAMESPACE3 = "document_processing";
 var OPERATION_ID3 = "query_index";
-var TITLE3 = "Query Index";
+var TITLE3 = "Query Index (Smart)";
 var DESCRIPTION3 = "Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain";
 var SUMMARY3 = "Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain";
 var CATEGORY3 = "document processing";

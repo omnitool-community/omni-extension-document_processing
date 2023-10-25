@@ -1,6 +1,7 @@
 //@ts-check
 import { get_cached_cdn, save_chunks_cdn_to_db, save_json_to_cdn_as_buffer, is_valid, console_log } from '../../../../src/utils/omni-utils'
 import { computeChunkId, computeDocumentId } from './hashers.js';
+import { makeToast } from './toast.js';
 
 const DEFAULT_CHUNK_SIZE = 8092;
 const DEFAULT_CHUNK_OVERLAP = 4096; // !!!!!
@@ -54,8 +55,13 @@ export function computeTokenToChunkingSizeRatio(chunks, chunk_size, chunk_overla
 
 async function computeChunks(ctx, document_id, textBatches, hasher, embedder, tokenCounterFunction )
 {
+
+
   const chunks = [];
   let index = 0;
+  const length = textBatches.length;
+  let chunk_index = 0;
+
   for (const textBatch of textBatches)
   {
     
@@ -68,6 +74,8 @@ async function computeChunks(ctx, document_id, textBatches, hasher, embedder, to
         await embedder.embedQuery(chunk_text); // No need to save it as the embedder is automatically caching the embedding of each chunk in the DB
         const chunk_token_count = tokenCounterFunction(chunk_text);
         const chunk_json = { source: document_id, index: index, id: chunk_id, token_count: chunk_token_count, text: chunk_text };
+        makeToast(ctx, `Created document fragment ${chunk_index+1}/${length}`);
+        chunk_index++;
         return chunk_json;
       }
     });

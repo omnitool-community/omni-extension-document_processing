@@ -15,7 +15,7 @@ import { loadIndexes, getChunksFromIndexAndIndexedDocuments } from './omnilib-do
 
 const NAMESPACE = 'document_processing';
 const OPERATION_ID = "query_index";
-const TITLE = 'Query Index';
+const TITLE = 'Query Index (Smart)';
 const DESCRIPTION = 'Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain';
 const SUMMARY = 'Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain';
 const CATEGORY = 'document processing';

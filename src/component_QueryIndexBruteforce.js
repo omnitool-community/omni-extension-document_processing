@@ -5,8 +5,8 @@
 
 //@ts-check
 import { createComponent, is_valid, sanitizeJSON, combineStringsWithoutOverlap, queryLlmByModelId, getLlmChoices, getModelMaxSize, getModelNameAndProviderFromId } from '../../../src/utils/omni-utils.js';
-import {  getChunksFromIndexAndIndexedDocuments, loadIndexes } from './omnilib-docs/vectorstore.js';
-
+import { getChunksFromIndexAndIndexedDocuments, loadIndexes } from './omnilib-docs/vectorstore.js';
+import { makeToast, sleep } from './omnilib-docs/toast.js';
 const NAMESPACE = 'document_processing';;
 const OPERATION_ID = 'query_index_bruteforce';
 const TITLE = 'Query Index (Brute Force)';
@@ -29,13 +29,13 @@ async function async_getQueryIndexBruteforceComponent()
         { name: 'model_id', title: 'model', type: 'string', defaultValue: 'gpt-3.5-turbo-16k|openai', choices: llm_choices },
         { name: 'index', title: 'Read from Index:', type: 'string', description: "All indexed documents sharing the same Index will be grouped and queried together" },
         { name: 'context_size', type: 'number', defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 100000], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
-        { name: 'llm_args', type: 'object', customSocket: 'object', description: 'Extra arguments provided to the LLM'},
+        { name: 'llm_args', type: 'object', customSocket: 'object', description: 'Extra arguments provided to the LLM' },
     ];
 
     const outputs = [
         { name: 'answer', type: 'string', customSocket: 'text', description: 'The answer to the query or prompt', title: 'Answer' },
         { name: 'json', type: 'object', customSocket: 'object', description: 'The answer in json format, with possibly extra arguments returned by the LLM', title: 'Json' },
-        { name: 'info', type: 'string', customSocket: 'text', description: "Information about the block's operation"},
+        { name: 'info', type: 'string', customSocket: 'text', description: "Information about the block's operation" },
     ];
     const controls = null;
 
@@ -70,51 +70,13 @@ async function queryIndexBruteforce(payload, ctx)
     const max_size = context_size * 0.9; // we use some margin
     info += `Using a max_size of ${max_size} tokens.  \n|`;
 
-    /*
-    const splits = getModelNameAndProviderFromId(model_id);
-    const model_name = splits.model_name;
-    if (context_size == 0) 
-    {
-        max_size = getModelMaxSize(model_name);
-    }
-    else if (context_size > 0)
-    {
-        max_size = Math.min(context_size, getModelMaxSize(model_name));
-    }
-    */
-    /*
-    const raw_chunks = await getChunksFromIndexAndIndexedDocuments(ctx, all_indexes, index, indexed_documents);
-    const already_used_ids = {};
-    const chunks = [];
-    for (const chunk of raw_chunks)
-    {
-        const chunk_id = chunk?.id;
-        if (already_used_ids[chunk_id])
-        {
-            info += `chunk_id ${chunk_id} already queried. Skipping...  \n|`;
-            continue;
-        }
-        already_used_ids[chunk_id] = true;
-
-        const text = chunk?.text;
-        if (!is_valid(text))
-        { 
-            info += `invalid text. Skipping: ${chunk_id}.  \n|`;
-            continue;
-        }
-
-        chunks.push(chunk)
-    }
-    */
     const chunks = await getChunksFromIndexAndIndexedDocuments(ctx, all_indexes, index, indexed_documents);
 
     let chunk_index = 0;
     let total_token_cost = 0;
     let combined_text = "";
-    let llm_results = [];
-    let answer = "";
     const instruction = "Based on the user's prompt, answer the following question to the best of your abilities: " + query;
-
+    const blocks = [];
     for (const chunk of chunks)
     {
         const is_last_index = (chunk_index == chunks.length - 1);
@@ -133,38 +95,38 @@ async function queryIndexBruteforce(payload, ctx)
         }
         else
         {
-            info += `Processing Block #${chunk_index - 1}.  \n|`; // we haven't added the current chunk's text to combined text (because it does not fit), so we are processing the previous chunk
-            const partial_result = await sendToLLM(ctx, combined_text, instruction, model_id, temperature, llm_args);
-            const text = partial_result.text;
-            llm_results.push(partial_result);
-            
-            if (text && text.length > 0) 
-            {
-                answer += text + "   \n\n";
-                info += `Answer: ${text}.  \n|`;
-            }
-
+            blocks.push(combined_text);
             combined_text = chunk_text;
             total_token_cost = token_cost;
         }
 
         if (is_last_index)
         {
-            // Whatever is in combined_text needs to be processed now, as there won't be another chance in a later chunk
-            info += `Processing Block #${chunk_index}.  \n|`;
-            const partial_result = await sendToLLM(ctx, combined_text, instruction, model_id, temperature, llm_args);
-            const text = partial_result.text;
-            llm_results.push(partial_result);
-            
-            if (text && text.length > 0) 
-            {
-                answer += text + "   \n\n";
-                info += `Answer: ${text}.  \n|`;
-            }        
+            blocks.push(combined_text);
         }
 
-        chunk_index+=1;                
+        chunk_index += 1;
     }
+
+    makeToast(ctx, `Processing ${blocks.length} blocks`);
+    const promises = blocks.map((block_text, index) =>
+        processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, index + 1, blocks.length)
+    );
+
+    const llm_results = await Promise.all(promises);
+
+    let answer = "";
+
+    llm_results.forEach((partial_result, index) =>
+    {
+        const text = partial_result.text;
+        if (text && text.length > 0)
+        {
+            answer += text + "   \n\n";
+            info += `Answer: ${text}.  \n|`;
+        }
+    });
+
     const json = { 'answers': llm_results };
 
     const response = { result: { "ok": true }, answer, json, info };
@@ -173,19 +135,24 @@ async function queryIndexBruteforce(payload, ctx)
     return response;
 }
 
+async function processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, block_index, block_count) {
+    // Introduce a delay before making the request
+    await sleep(1000 * block_index); // waits for block_index seconds
+    makeToast(ctx, `Queuing up Block #${block_index}/${block_count}`);
 
-async function sendToLLM(ctx, combined_text, instruction, model_id, temperature, llm_args)
-{
-
-    const gpt_results = await queryLlmByModelId(ctx, combined_text, instruction, model_id, temperature, llm_args);
-    const sanetized_results = sanitizeJSON(gpt_results);
+    const results = await queryLlmByModelId(ctx, block_text, instruction, model_id, temperature, llm_args);
+    const sanetized_results = sanitizeJSON(results);
     const text = sanetized_results?.answer_text || "";
     const function_arguments_string = sanetized_results?.answer_json?.function_arguments_string; 
     const function_arguments = sanetized_results?.answer_json?.function_arguments;
-    const result = { text, function_arguments_string, function_arguments };
 
-    return result;
+    makeToast(ctx, `### Received answer for Block ${block_index}/${block_count}  \n\n${text}`);
+
+    return { text, function_arguments_string, function_arguments };
 }
 
 
-export { async_getQueryIndexBruteforceComponent, queryIndexBruteforce};
+
+
+
+export { async_getQueryIndexBruteforceComponent, queryIndexBruteforce };
