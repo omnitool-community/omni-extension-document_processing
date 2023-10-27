@@ -73,19 +73,7 @@ async function queryIndex(payload, ctx)
   const embedder = await initializeEmbedder(ctx);
   if (!embedder) throw new Error(`Cannot initialize embedded`);
 
-  const all_indexes = await loadIndexes(ctx);
-  if (!all_indexes) throw new Error(`[query_chunks_component] Error loading indexes`);
-  if (!index || index == "" )
-  {
-    info += `WARNING: No index used.\n|  `; 
-    if (!is_valid(indexed_documents)) throw new Error(`Without passing an index, you need to pass at least one document to query`);
-  }
-  else
-  {
-    if (index in all_indexes == false) throw new Error(`Index ${index} not found in indexes`);
-  }
-
-  const all_chunks = await getChunksFromIndexAndIndexedDocuments(ctx, all_indexes, index, indexed_documents);
+  const all_chunks = await getChunksFromIndexAndIndexedDocuments(ctx, index, indexed_documents);
   if (!is_valid(all_chunks)) throw new Error(`No fragments returned from index ${index} or documents ${indexed_documents}`);
 
   const vectorstore = await createVectorstoreFromChunks(all_chunks, embedder);

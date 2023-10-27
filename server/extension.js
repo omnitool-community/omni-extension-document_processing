@@ -2688,7 +2688,7 @@ var require_lib5 = __commonJS({
 });
 
 // component_IndexDocuments.js
-import { createComponent, countTokens as countTokensFunction, downloadTextsFromCdn } from "../../../src/utils/omni-utils.js";
+import { createComponent, countTokens as countTokensFunction, downloadTextsFromCdn, getLlmChoices } from "../../../src/utils/omni-utils.js";
 
 // omnilib-docs/hashers.js
 import { console_log, is_valid } from "../../../src/utils/omni-utils.js";
@@ -3497,7 +3497,7 @@ var BaseTracer = class extends BaseCallbackHandler {
     await this.onLLMError?.(run);
     await this._endTrace(run);
   }
-  async handleChainStart(chain, inputs3, runId, parentRunId, tags, metadata, runType) {
+  async handleChainStart(chain, inputs2, runId, parentRunId, tags, metadata, runType) {
     const execution_order = this._getExecutionOrder(parentRunId);
     const start_time = Date.now();
     const run = {
@@ -3512,7 +3512,7 @@ var BaseTracer = class extends BaseCallbackHandler {
           time: new Date(start_time).toISOString()
         }
       ],
-      inputs: inputs3,
+      inputs: inputs2,
       execution_order,
       child_execution_order: execution_order,
       run_type: runType ?? "chain",
@@ -3523,13 +3523,13 @@ var BaseTracer = class extends BaseCallbackHandler {
     this._startTrace(run);
     await this.onChainStart?.(run);
   }
-  async handleChainEnd(outputs3, runId, _parentRunId, _tags, kwargs) {
+  async handleChainEnd(outputs2, runId, _parentRunId, _tags, kwargs) {
     const run = this.runMap.get(runId);
     if (!run) {
       throw new Error("No chain run to end.");
     }
     run.end_time = Date.now();
-    run.outputs = _coerceToDict(outputs3, "output");
+    run.outputs = _coerceToDict(outputs2, "output");
     run.events.push({
       name: "end",
       time: new Date(run.end_time).toISOString()
@@ -3827,8 +3827,8 @@ var ConsoleCallbackHandler = class extends BaseTracer {
    */
   onLLMStart(run) {
     const crumbs = this.getBreadcrumbs(run);
-    const inputs3 = "prompts" in run.inputs ? { prompts: run.inputs.prompts.map((p) => p.trim()) } : run.inputs;
-    console.log(`${wrap(color.green, "[llm/start]")} [${crumbs}] Entering LLM run with input: ${tryJsonStringify(inputs3, "[inputs]")}`);
+    const inputs2 = "prompts" in run.inputs ? { prompts: run.inputs.prompts.map((p) => p.trim()) } : run.inputs;
+    console.log(`${wrap(color.green, "[llm/start]")} [${crumbs}] Entering LLM run with input: ${tryJsonStringify(inputs2, "[inputs]")}`);
   }
   /**
    * Method used to log the end of an LLM run.
@@ -4123,17 +4123,17 @@ function trimQuotes(str) {
   }
   return str.trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
 }
-function hideInputs(inputs3) {
+function hideInputs(inputs2) {
   if (getEnvironmentVariable("LANGCHAIN_HIDE_INPUTS") === "true") {
     return {};
   }
-  return inputs3;
+  return inputs2;
 }
-function hideOutputs(outputs3) {
+function hideOutputs(outputs2) {
   if (getEnvironmentVariable("LANGCHAIN_HIDE_OUTPUTS") === "true") {
     return {};
   }
-  return outputs3;
+  return outputs2;
 }
 var Client = class _Client {
   constructor(config = {}) {
@@ -4769,7 +4769,7 @@ var Client = class _Client {
     }
     await response.json();
   }
-  async createExample(inputs3, outputs3, { datasetId, datasetName, createdAt, exampleId }) {
+  async createExample(inputs2, outputs2, { datasetId, datasetName, createdAt, exampleId }) {
     let datasetId_ = datasetId;
     if (datasetId_ === void 0 && datasetName === void 0) {
       throw new Error("Must provide either datasetName or datasetId");
@@ -4782,8 +4782,8 @@ var Client = class _Client {
     const createdAt_ = createdAt || /* @__PURE__ */ new Date();
     const data = {
       dataset_id: datasetId_,
-      inputs: inputs3,
-      outputs: outputs3,
+      inputs: inputs2,
+      outputs: outputs2,
       created_at: createdAt_.toISOString(),
       id: exampleId
     };
@@ -5692,11 +5692,11 @@ var CallbackManager = class _CallbackManager extends BaseCallbackManager {
       return new CallbackManagerForLLMRun(runId, this.handlers, this.inheritableHandlers, this.tags, this.inheritableTags, this.metadata, this.inheritableMetadata, this._parentRunId);
     }));
   }
-  async handleChainStart(chain, inputs3, runId = v4_default(), runType = void 0) {
+  async handleChainStart(chain, inputs2, runId = v4_default(), runType = void 0) {
     await Promise.all(this.handlers.map((handler) => consumeCallback(async () => {
       if (!handler.ignoreChain) {
         try {
-          await handler.handleChainStart?.(chain, inputs3, runId, this._parentRunId, this.tags, this.metadata, runType);
+          await handler.handleChainStart?.(chain, inputs2, runId, this._parentRunId, this.tags, this.metadata, runType);
         } catch (err) {
           console.error(`Error in handler ${handler.constructor.name}, handleChainStart: ${err}`);
         }
@@ -5984,12 +5984,12 @@ var Runnable = class extends Serializable {
    * @param batchOptions.maxConcurrency Maximum number of calls to run at once.
    * @returns An array of RunOutputs
    */
-  async batch(inputs3, options, batchOptions) {
-    const configList = this._getOptionsList(options ?? {}, inputs3.length);
-    const batchSize = batchOptions?.maxConcurrency && batchOptions.maxConcurrency > 0 ? batchOptions?.maxConcurrency : inputs3.length;
+  async batch(inputs2, options, batchOptions) {
+    const configList = this._getOptionsList(options ?? {}, inputs2.length);
+    const batchSize = batchOptions?.maxConcurrency && batchOptions.maxConcurrency > 0 ? batchOptions?.maxConcurrency : inputs2.length;
     const batchResults = [];
-    for (let i = 0; i < inputs3.length; i += batchSize) {
-      const batchPromises = inputs3.slice(i, i + batchSize).map((input, j) => this.invoke(input, configList[j]));
+    for (let i = 0; i < inputs2.length; i += batchSize) {
+      const batchPromises = inputs2.slice(i, i + batchSize).map((input, j) => this.invoke(input, configList[j]));
       const batchResult = await Promise.all(batchPromises);
       batchResults.push(batchResult);
     }
@@ -6177,11 +6177,11 @@ var RunnableSequence = class _RunnableSequence extends Runnable {
     await runManager?.handleChainEnd(_coerceToDict2(finalOutput, "output"));
     return finalOutput;
   }
-  async batch(inputs3, options, batchOptions) {
-    const configList = this._getOptionsList(options ?? {}, inputs3.length);
+  async batch(inputs2, options, batchOptions) {
+    const configList = this._getOptionsList(options ?? {}, inputs2.length);
     const callbackManagers = await Promise.all(configList.map((config) => CallbackManager.configure(config?.callbacks, void 0, config?.tags, void 0, config?.metadata)));
-    const runManagers = await Promise.all(callbackManagers.map((callbackManager, i) => callbackManager?.handleChainStart(this.toJSON(), _coerceToDict2(inputs3[i], "input"))));
-    let nextStepInputs = inputs3;
+    const runManagers = await Promise.all(callbackManagers.map((callbackManager, i) => callbackManager?.handleChainStart(this.toJSON(), _coerceToDict2(inputs2[i], "input"))));
+    let nextStepInputs = inputs2;
     let finalOutputs;
     try {
       for (let i = 0; i < [this.first, ...this.middle].length; i += 1) {
@@ -6383,12 +6383,12 @@ var RunnableBinding = class _RunnableBinding extends Runnable {
   async invoke(input, options) {
     return this.bound.invoke(input, { ...options, ...this.kwargs });
   }
-  async batch(inputs3, options, batchOptions) {
+  async batch(inputs2, options, batchOptions) {
     const mergedOptions = Array.isArray(options) ? options.map((individualOption) => ({
       ...individualOption,
       ...this.kwargs
     })) : { ...options, ...this.kwargs };
-    return this.bound.batch(inputs3, mergedOptions, batchOptions);
+    return this.bound.batch(inputs2, mergedOptions, batchOptions);
   }
   async stream(input, options) {
     return this.bound.stream(input, { ...options, ...this.kwargs });
@@ -6454,16 +6454,16 @@ var RunnableWithFallbacks = class extends Runnable {
     await runManager?.handleChainError(firstError);
     throw firstError;
   }
-  async batch(inputs3, options, batchOptions) {
-    const configList = this._getOptionsList(options ?? {}, inputs3.length);
+  async batch(inputs2, options, batchOptions) {
+    const configList = this._getOptionsList(options ?? {}, inputs2.length);
     const callbackManagers = await Promise.all(configList.map((config) => CallbackManager.configure(config?.callbacks, void 0, config?.tags, void 0, config?.metadata)));
-    const runManagers = await Promise.all(callbackManagers.map((callbackManager, i) => callbackManager?.handleChainStart(this.toJSON(), _coerceToDict2(inputs3[i], "input"))));
+    const runManagers = await Promise.all(callbackManagers.map((callbackManager, i) => callbackManager?.handleChainStart(this.toJSON(), _coerceToDict2(inputs2[i], "input"))));
     let firstError;
     for (const runnable of this.runnables()) {
       try {
-        const outputs3 = await runnable.batch(inputs3, runManagers.map((runManager, j) => this._patchConfig(configList[j], runManager?.getChild())), batchOptions);
-        await Promise.all(runManagers.map((runManager, i) => runManager?.handleChainEnd(_coerceToDict2(outputs3[i], "output"))));
-        return outputs3;
+        const outputs2 = await runnable.batch(inputs2, runManagers.map((runManager, j) => this._patchConfig(configList[j], runManager?.getChild())), batchOptions);
+        await Promise.all(runManagers.map((runManager, i) => runManager?.handleChainEnd(_coerceToDict2(outputs2[i], "output"))));
+        return outputs2;
       } catch (e) {
         if (firstError === void 0) {
           firstError = e;
@@ -7143,111 +7143,6 @@ var TokenTextSplitter = class extends TextSplitter {
   }
 };
 
-// omnilib-docs/chunking.js
-import { get_cached_cdn, save_chunks_cdn_to_db, save_json_to_cdn_as_buffer, is_valid as is_valid2, console_log as console_log2 } from "../../../src/utils/omni-utils.js";
-
-// omnilib-docs/toast.js
-function makeToast(ctx, message) {
-  const app = ctx.app;
-  const user = ctx.userId;
-  const description_json = { type: "info", description: `Chunking document progress` };
-  const toast = { user, message, description_json };
-  app.sendToastToUser(user, toast);
-}
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// omnilib-docs/chunking.js
-var DEFAULT_CHUNK_SIZE = 8092;
-var DEFAULT_CHUNK_OVERLAP = 4096;
-var EMBEDDING_BATCH_SIZE = 10;
-function createBatches(arr, size) {
-  const batches = [];
-  for (let i = 0; i < arr.length; i += size) {
-    const start_index = i;
-    const end_index = Math.min(i + size, arr.length);
-    const batch = arr.slice(start_index, end_index);
-    batches.push(batch);
-  }
-  return batches;
-}
-async function breakTextIntoBatches(text, splitter) {
-  const splitted_texts = await splitter.splitText(text);
-  const textBatches = createBatches(splitted_texts, EMBEDDING_BATCH_SIZE);
-  return textBatches;
-}
-function computeTokenToChunkingSizeRatio(chunks, chunk_size, chunk_overlap) {
-  let total_token_count = 0;
-  let total_chunk_size = 0;
-  let index = 0;
-  for (const chunk of chunks) {
-    if (index != chunks.length - 1) {
-      if (chunk && chunk.token_count)
-        total_token_count += chunk.token_count;
-      total_chunk_size += chunk_size + chunk_overlap;
-    }
-    index += 1;
-  }
-  let token_to_chunking_size_ratio = -1;
-  if (total_chunk_size != 0)
-    token_to_chunking_size_ratio = total_token_count / total_chunk_size;
-  return token_to_chunking_size_ratio;
-}
-async function computeChunks(ctx, document_id, textBatches, hasher, embedder, tokenCounterFunction) {
-  const chunks = [];
-  let index = 0;
-  const length = textBatches.length;
-  let chunk_index = 0;
-  for (const textBatch of textBatches) {
-    const embeddingPromises = textBatch.map(async (chunk_text) => {
-      const nb_of_chars = chunk_text.length;
-      if (nb_of_chars > 0) {
-        const chunk_id = computeChunkId(ctx, chunk_text, hasher);
-        await embedder.embedQuery(chunk_text);
-        const chunk_token_count = tokenCounterFunction(chunk_text);
-        const chunk_json = { source: document_id, index, id: chunk_id, token_count: chunk_token_count, text: chunk_text };
-        makeToast(ctx, `Created document fragment ${chunk_index + 1}/${length}`);
-        chunk_index++;
-        return chunk_json;
-      }
-    });
-    const batchResults = await Promise.all(embeddingPromises);
-    chunks.push(...batchResults);
-    index += 1;
-  }
-  if (is_valid2(chunks) === false) {
-    throw new Error(`ERROR could not chunk the documents`);
-  }
-  return chunks;
-}
-async function uploadTextWithCaching(ctx, text, hasher, chunk_size, chunk_overlap, overwrite) {
-  const text_id = computeDocumentId(ctx, [text], hasher, chunk_size, chunk_overlap);
-  let text_cdn = await get_cached_cdn(ctx, text_id, overwrite);
-  if (!is_valid2(text_cdn)) {
-    const buffer = Buffer.from(text);
-    text_cdn = await ctx.app.cdn.putTemp(buffer, { mimeType: "text/plain; charset=utf-8", userId: ctx.userId });
-  } else {
-    console_log2(`[ingestText] Found text_cdn: ${JSON.stringify(text_cdn)} in the DB under id: ${text_id}. Skipping uploading to CDN...`);
-  }
-  return text_cdn;
-}
-async function chunkText(ctx, document_id, document_text, hasher, embedder, splitter, tokenCounterFunction) {
-  const text_batches = await breakTextIntoBatches(document_text, splitter);
-  const document_chunks = await computeChunks(ctx, document_id, text_batches, hasher, embedder, tokenCounterFunction);
-  return document_chunks;
-}
-async function saveIndexedDocument(ctx, document_id, chunks, chunk_size, chunk_overlap, token_to_chunking_size_ratio, splitter_model) {
-  const indexed_document_info = { id: document_id, splitter_model, chunks, chunk_size, chunk_overlap, token_to_chunking_size_ratio };
-  const indexed_document_cdn = await save_json_to_cdn_as_buffer(ctx, indexed_document_info);
-  if (!indexed_document_cdn)
-    throw new Error(`ERROR: could not save document_cdn to cdn`);
-  const success = await save_chunks_cdn_to_db(ctx, indexed_document_cdn, document_id);
-  if (success == false)
-    throw new Error(`ERROR: could not save document_cdn to db`);
-  return indexed_document_cdn;
-}
-
 // omnilib-docs/splitter.js
 var SPLITTER_MODEL_RECURSIVE = "RecursiveCharacterTextSplitter";
 var SPLITTER_MODEL_TOKEN = "TokenTextSplitter";
@@ -7288,7 +7183,7 @@ function extractCodeLanguage(str) {
   }
   return null;
 }
-function initializeSplitter(splitter_model = DEFAULT_SPLITTER_MODEL, chunk_size = DEFAULT_CHUNK_SIZE, chunk_overlap = DEFAULT_CHUNK_OVERLAP) {
+function initializeSplitter(splitter_model = DEFAULT_SPLITTER_MODEL, chunk_size, chunk_overlap) {
   let splitter = null;
   if (splitter_model == SPLITTER_MODEL_RECURSIVE) {
     splitter = new RecursiveCharacterTextSplitter({
@@ -7322,7 +7217,7 @@ function initializeSplitter(splitter_model = DEFAULT_SPLITTER_MODEL, chunk_size 
 }
 
 // omnilib-docs/embedder.js
-import { is_valid as is_valid3, console_log as console_log3, user_db_put, user_db_get, user_db_delete } from "../../../src/utils/omni-utils.js";
+import { is_valid as is_valid2, console_log as console_log2, user_db_put, user_db_get, user_db_delete } from "../../../src/utils/omni-utils.js";
 
 // node_modules/langchain/dist/embeddings/base.js
 var Embeddings = class {
@@ -7356,7 +7251,7 @@ var Embedder = class extends Embeddings {
   }
   async embedDocuments(texts) {
     const embeddings = [];
-    if (is_valid3(texts)) {
+    if (is_valid2(texts)) {
       for (let i = 0; i < texts.length; i += 1) {
         let text = texts[i];
         const embedding = await this.embedQuery(text);
@@ -7366,10 +7261,10 @@ var Embedder = class extends Embeddings {
     return embeddings;
   }
   async embedQuery(text, save_embedding = true) {
-    if (!is_valid3(text)) {
+    if (!is_valid2(text)) {
       throw new Error(`[embeddings] passed text is invalid ${text}`);
     }
-    console_log3(`[embeddings] embedQuery of: ${text.slice(0, 128)}[...]`);
+    console_log2(`[embeddings] embedQuery of: ${text.slice(0, 128)}[...]`);
     const embedding_id = computeChunkId(this.ctx, text, this.hasher);
     let embedding = null;
     if (save_embedding) {
@@ -7379,20 +7274,20 @@ var Embedder = class extends Embeddings {
         const db_entry = await user_db_get(this.ctx, embedding_id);
         embedding = db_entry?.embedding;
       }
-      if (is_valid3(embedding)) {
-        console_log3(`[embeddings]: embedding found in DB - returning it`);
+      if (is_valid2(embedding)) {
+        console_log2(`[embeddings]: embedding found in DB - returning it`);
         return embedding;
       }
     }
-    console_log3(`[embeddings] Not found in DB. Generating embedding for ${text.slice(0, 128)}[...]`);
+    console_log2(`[embeddings] Not found in DB. Generating embedding for ${text.slice(0, 128)}[...]`);
     try {
-      console_log3(`[embeddings] Using embedded: ${this.embedder}`);
+      console_log2(`[embeddings] Using embedded: ${this.embedder}`);
       embedding = await this.embedder.embedQuery(text);
-      if (!is_valid3(embedding)) {
-        console_log3(`[embeddings]: [WARNING] embedding ${embedding} is invalid - returning null <---------------`);
+      if (!is_valid2(embedding)) {
+        console_log2(`[embeddings]: [WARNING] embedding ${embedding} is invalid - returning null <---------------`);
         return null;
       }
-      console_log3(`[embeddings]: computed embedding: ${embedding.slice(0, 128)}[...]`);
+      console_log2(`[embeddings]: computed embedding: ${embedding.slice(0, 128)}[...]`);
       if (save_embedding) {
         const db_value = { embedding, text, id: embedding_id };
         const success = await user_db_put(this.ctx, db_value, embedding_id);
@@ -7408,7 +7303,7 @@ var Embedder = class extends Embeddings {
 };
 
 // omnilib-docs/embedding_Openai.js
-import { is_valid as is_valid4, console_log as console_log4, runBlock } from "../../../src/utils/omni-utils.js";
+import { is_valid as is_valid3, console_log as console_log3, runBlock } from "../../../src/utils/omni-utils.js";
 var Embedding_Openai = class extends Embeddings {
   constructor(ctx, params = null) {
     super(params);
@@ -7416,7 +7311,7 @@ var Embedding_Openai = class extends Embeddings {
   }
   async embedDocuments(texts) {
     const embeddings = [];
-    if (is_valid4(texts)) {
+    if (is_valid3(texts)) {
       for (let i = 0; i < texts.length; i += 1) {
         let text = texts[i];
         const embedding = await this.embedQuery(text);
@@ -7426,19 +7321,19 @@ var Embedding_Openai = class extends Embeddings {
     return embeddings;
   }
   async embedQuery(text) {
-    console_log4(`[OmniOpenAIEmbeddings] embedQuery: Requested to embed text: ${text.slice(0, 128)}[...]`);
-    if (!is_valid4(text)) {
-      console_log4(`[OmniOpenAIEmbeddings] WARNING embedQuery: passed text is invalid ${text}`);
+    console_log3(`[OmniOpenAIEmbeddings] embedQuery: Requested to embed text: ${text.slice(0, 128)}[...]`);
+    if (!is_valid3(text)) {
+      console_log3(`[OmniOpenAIEmbeddings] WARNING embedQuery: passed text is invalid ${text}`);
       return null;
     }
-    console_log4(`[OmniOpenAIEmbeddings] generating embedding for ${text.slice(0, 128)}`);
+    console_log3(`[OmniOpenAIEmbeddings] generating embedding for ${text.slice(0, 128)}`);
     try {
       const response = await this.compute_embedding_via_runblock(this.ctx, text);
-      console_log4(`[OmniOpenAIEmbeddings] embedQuery: response: ${JSON.stringify(response)}`);
+      console_log3(`[OmniOpenAIEmbeddings] embedQuery: response: ${JSON.stringify(response)}`);
       const embedding = response;
       return embedding;
     } catch (error) {
-      console_log4(`[OmniOpenAIEmbeddings] WARNING embedQuery: Error generating embedding via runBlock for ctx=${this.ctx} and text=${text}
+      console_log3(`[OmniOpenAIEmbeddings] WARNING embedQuery: Error generating embedding via runBlock for ctx=${this.ctx} and text=${text}
 Error: ${error}`);
       return null;
     }
@@ -7463,7 +7358,7 @@ Error: ${error}`);
       throw new Error(`[OmniOpenAIEmbeddings] embedding runBlock response.error: ${response.error}`);
     }
     let data = response?.data || null;
-    if (is_valid4(data) == false) {
+    if (is_valid3(data) == false) {
       throw new Error(`[OmniOpenAIEmbeddings] embedding runBlock response is invalid: ${JSON.stringify(response)}`);
     }
     ;
@@ -7489,6 +7384,161 @@ async function initializeEmbedder(ctx) {
   if (embedder == null || embedder == void 0)
     throw new Error(`get_embedder: Failed to initialize embeddings_model ${embedder_model}`);
   return embedder;
+}
+
+// omnilib-docs/chunking.js
+import { get_cached_cdn, save_chunks_cdn_to_db, save_json_to_cdn_as_buffer, is_valid as is_valid4, console_log as console_log4, combineStringsWithoutOverlap } from "../../../src/utils/omni-utils.js";
+
+// omnilib-docs/utilities.js
+import { getModelMaxSize, getModelNameAndProviderFromId } from "../../../src/utils/omni-utils.js";
+var CONTEXT_SAFETY_MARGIN = 0.9;
+function makeToast(ctx, message) {
+  const app = ctx.app;
+  const user = ctx.userId;
+  const description_json = { type: "info", description: `Chunking document progress` };
+  const toast = { user, message, description_json };
+  app.sendToastToUser(user, toast);
+}
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+function getModelMaxSizeFromModelId(context_size, model_id) {
+  let max_size = 0;
+  if (context_size == 0) {
+    const splits = getModelNameAndProviderFromId(model_id);
+    const model_name = splits.model_name;
+    max_size = getModelMaxSize(model_name, false) * CONTEXT_SAFETY_MARGIN;
+  } else {
+    max_size = context_size * CONTEXT_SAFETY_MARGIN;
+  }
+  return max_size;
+}
+
+// omnilib-docs/chunking.js
+var DEFAULT_FRAGMENT_SIZE = 4096;
+var DEFAULT_OVERLAP_PERCENT = 0.5;
+var EMBEDDING_BATCH_SIZE = 10;
+function createBatches(arr, size) {
+  const batches = [];
+  for (let i = 0; i < arr.length; i += size) {
+    const start_index = i;
+    const end_index = Math.min(i + size, arr.length);
+    const batch = arr.slice(start_index, end_index);
+    batches.push(batch);
+  }
+  return batches;
+}
+async function breakTextIntoBatches(text, splitter) {
+  const splitted_texts = await splitter.splitText(text);
+  const textBatches = createBatches(splitted_texts, EMBEDDING_BATCH_SIZE);
+  return textBatches;
+}
+function computeCharacterToTokenRatio(chunks) {
+  let total_token_count = 0;
+  let total_character_count = 0;
+  let index = 0;
+  for (const chunk of chunks) {
+    if (index != chunks.length - 1) {
+      if (chunk) {
+        if (chunk.token_count)
+          total_token_count += chunk.token_count;
+        if (chunk.text)
+          total_character_count += chunk.text.length;
+      }
+    }
+    index += 1;
+  }
+  let ratio = -1;
+  if (total_character_count != 0)
+    ratio = total_character_count / total_token_count;
+  return ratio;
+}
+async function processChunk(ctx, chunk_text, index, document_id, hasher, embedder, tokenCounterFunction, total_count) {
+  const nb_of_chars = chunk_text.length;
+  if (nb_of_chars > 0) {
+    const chunk_id = computeChunkId(ctx, chunk_text, hasher);
+    await embedder.embedQuery(chunk_text);
+    const chunk_token_count = tokenCounterFunction(chunk_text);
+    const chunk_json = { source: document_id, index, id: chunk_id, token_count: chunk_token_count, text: chunk_text };
+    makeToast(ctx, `Created document fragment ${index + 1}/${total_count}`);
+    return chunk_json;
+  }
+}
+async function computeChunks(ctx, document_id, textBatches, hasher, embedder, tokenCounterFunction) {
+  const chunks = [];
+  let total_count = 0;
+  for (const textBatch of textBatches) {
+    total_count += textBatch.length;
+  }
+  for (const textBatch of textBatches) {
+    const embeddingPromises = [];
+    for (let chunk_index = 0; chunk_index < textBatch.length; chunk_index++) {
+      const chunk_text = textBatch[chunk_index];
+      const embedPromise = processChunk(ctx, chunk_text, chunk_index, document_id, hasher, embedder, tokenCounterFunction, total_count);
+      embeddingPromises.push(embedPromise);
+    }
+    const batchResults = await Promise.all(embeddingPromises);
+    chunks.push(...batchResults);
+  }
+  if (is_valid4(chunks) === false) {
+    throw new Error(`ERROR could not chunk the documents`);
+  }
+  return chunks;
+}
+async function uploadTextWithCaching(ctx, text, hasher, chunk_size, chunk_overlap, overwrite) {
+  const text_id = computeDocumentId(ctx, [text], hasher, chunk_size, chunk_overlap);
+  let text_cdn = await get_cached_cdn(ctx, text_id, overwrite);
+  if (!is_valid4(text_cdn)) {
+    const buffer = Buffer.from(text);
+    text_cdn = await ctx.app.cdn.putTemp(buffer, { mimeType: "text/plain; charset=utf-8", userId: ctx.userId });
+  } else {
+    console_log4(`[ingestText] Found text_cdn: ${JSON.stringify(text_cdn)} in the DB under id: ${text_id}. Skipping uploading to CDN...`);
+  }
+  return text_cdn;
+}
+async function chunkText(ctx, document_id, document_text, hasher, embedder, splitter, tokenCounterFunction) {
+  const text_batches = await breakTextIntoBatches(document_text, splitter);
+  const document_chunks = await computeChunks(ctx, document_id, text_batches, hasher, embedder, tokenCounterFunction);
+  return document_chunks;
+}
+async function saveIndexedDocument(ctx, document_id, chunks, chunk_size, chunk_overlap, token_to_chunking_size_ratio, splitter_model) {
+  const indexed_document_info = { id: document_id, splitter_model, chunks, chunk_size, chunk_overlap, token_to_chunking_size_ratio };
+  const indexed_document_cdn = await save_json_to_cdn_as_buffer(ctx, indexed_document_info);
+  if (!indexed_document_cdn)
+    throw new Error(`ERROR: could not save document_cdn to cdn`);
+  const success = await save_chunks_cdn_to_db(ctx, indexed_document_cdn, document_id);
+  if (success == false)
+    throw new Error(`ERROR: could not save document_cdn to db`);
+  return indexed_document_cdn;
+}
+async function createChunkBlocks(ctx, max_size, all_chunks, info) {
+  let total_token_cost = 0;
+  let combined_text = "";
+  const blocks = [];
+  let chunk_index = 0;
+  for (const chunk of all_chunks) {
+    const is_last_index = chunk_index == all_chunks.length - 1;
+    const chunk_text = chunk?.text;
+    const chunk_id = chunk?.id;
+    const token_cost = chunk.token_count;
+    const can_fit = total_token_cost + token_cost <= max_size;
+    if (can_fit) {
+      combined_text = combineStringsWithoutOverlap(combined_text, chunk_text);
+      total_token_cost += token_cost;
+      info += `Combining chunks.  chunk_id: ${chunk_id}, Token cost: ${total_token_cost}.  
+|`;
+    } else {
+      blocks.push({ text: combined_text, token_cost: total_token_cost });
+      combined_text = chunk_text;
+      total_token_cost = token_cost;
+    }
+    if (is_last_index) {
+      blocks.push({ text: combined_text, token_cost: total_token_cost });
+    }
+    chunk_index += 1;
+  }
+  makeToast(ctx, `Processing ${blocks.length} blocks`);
+  return { blocks, info };
 }
 
 // omnilib-docs/vectorstore.js
@@ -7929,7 +7979,10 @@ async function getIndexedDocumentInfoFromCdn(ctx, document_cdn) {
     throw new Error(`ERROR: could not get document_json from cdn`);
   return document_info;
 }
-async function getChunksFromIndexAndIndexedDocuments(ctx, indexes, index, indexed_documents) {
+async function getChunksFromIndexAndIndexedDocuments(ctx, index, indexed_documents) {
+  const indexes = await loadIndexes(ctx);
+  if (!indexes)
+    throw new Error(`ERROR: could not load indexes from DB`);
   let all_chunks = [];
   let indexed_document_cdns = [];
   if (index && index != "")
@@ -7951,29 +8004,34 @@ async function getChunksFromIndexAndIndexedDocuments(ctx, indexes, index, indexe
 }
 
 // component_IndexDocuments.js
-var NAMESPACE = "document_processing";
-var OPERATION_ID = "index_documents";
-var TITLE = "Index documents";
-var DESCRIPTION = "Index document(s), chunking them and computing the embedding for each chunk";
-var SUMMARY = "Index document(s), chunking them and computing the embedding for each chunk";
-var CATEGORY = "document processing";
-var inputs = [
-  { name: "documents", title: "Documents to index", type: "array", customSocket: "documentArray", description: "Documents to be indexed", allowMultiple: true },
-  { name: "text", type: "string", title: "Text to index", customSocket: "text", description: "And/or some Text to be indexed directly", allowMultiple: true },
-  { name: "splitter_model", type: "string", defaultValue: "RecursiveCharacterTextSplitter", title: "Splitter Model", description: "Choosing a splitter model that matches the type of document being indexed will produce the best results", choices: getSplitterChoices() },
-  { name: "chunk_size", type: "number", defaultValue: 8e3, minimum: 0, maximum: 1e5, step: 1e3 },
-  { name: "chunk_overlap", type: "number", defaultValue: 4e3, minimum: 0, maximum: 5e4, step: 500 },
-  { name: "overwrite", type: "boolean", defaultValue: false, description: "If set to true, will overwrite existing matching documents" },
-  { name: "index", title: "Save to Index:", type: "string", description: "All indexed documents sharing the same index will be grouped and queried together" }
-];
-var outputs = [
-  { name: "info", type: "string", customSocket: "text", description: "Info on the result of the indexation" },
-  { name: "index", type: "string", customSocket: "text", description: "The name of the index that was created or updated" },
-  { name: "documents", title: "Indexed Documents", type: "array", customSocket: "documentArray", description: "The indexed version of the documents" }
-];
-var links = {};
-var controls = null;
-var IndexDocumentsComponent = createComponent(NAMESPACE, OPERATION_ID, TITLE, CATEGORY, DESCRIPTION, SUMMARY, links, inputs, outputs, controls, indexDocuments_function);
+async function async_getIndexComponent() {
+  const NAMESPACE4 = "document_processing";
+  const OPERATION_ID4 = "index_documents";
+  const TITLE4 = "Index documents";
+  const DESCRIPTION4 = "Index document(s), chunking them and computing the embedding for each chunk";
+  const SUMMARY4 = "Index document(s), chunking them and computing the embedding for each chunk";
+  const CATEGORY4 = "document processing";
+  const llm_choices = await getLlmChoices();
+  const inputs2 = [
+    { name: "documents", title: "Documents to index", type: "array", customSocket: "documentArray", description: "Documents to be indexed", allowMultiple: true },
+    { name: "text", type: "string", title: "Text to index", customSocket: "text", description: "And/or some Text to be indexed directly", allowMultiple: true },
+    { name: "splitter_model", type: "string", defaultValue: "RecursiveCharacterTextSplitter", title: "Splitter Model", description: "Choosing a splitter model that matches the type of document being indexed will produce the best results", choices: getSplitterChoices() },
+    { name: "fragment_size", type: "number", defaultValue: 8192, minimum: 0, maximum: 131072, step: 1024, description: "Approximate size of the fragments, in tokens." },
+    { name: "overlap_percent", type: "number", defaultValue: 0.5, minimum: 0, maximum: 1, step: 0.05, description: "Approximate size of the overlap between fragments, in percentage. Default is .5 (50%)" },
+    { name: "overwrite", type: "boolean", defaultValue: false, description: "If set to true, will overwrite existing matching documents" },
+    { name: "index", title: "Save to Index:", type: "string", description: "All indexed documents sharing the same index will be grouped and queried together" },
+    { name: "characters_to_tokens_ratio", type: "number", defaultValue: 4.7, minimum: 0, maximum: 20, step: 0.1, description: "how many characters per token, in average" }
+  ];
+  const outputs2 = [
+    { name: "info", type: "string", customSocket: "text", description: "Info on the result of the indexation" },
+    { name: "index", type: "string", customSocket: "text", description: "The name of the index that was created or updated" },
+    { name: "documents", title: "Indexed Documents", type: "array", customSocket: "documentArray", description: "The indexed version of the documents" }
+  ];
+  const links2 = {};
+  const controls2 = null;
+  const IndexDocumentsComponent = createComponent(NAMESPACE4, OPERATION_ID4, TITLE4, CATEGORY4, DESCRIPTION4, SUMMARY4, links2, inputs2, outputs2, controls2, indexDocuments_function);
+  return IndexDocumentsComponent;
+}
 async function indexDocuments_function(payload, ctx) {
   console.time("indexDocuments_function");
   const hasher_model = DEFAULT_HASHER_MODEL;
@@ -7982,10 +8040,36 @@ async function indexDocuments_function(payload, ctx) {
   const text = payload.text;
   const overwrite = payload.overwrite || false;
   const splitter_model = payload.splitter_model || DEFAULT_SPLITTER_MODEL;
-  const chunk_size = payload.chunk_size || DEFAULT_CHUNK_SIZE;
-  const chunk_overlap = payload.chunk_overlap || DEFAULT_CHUNK_OVERLAP;
+  const overlap_percent = payload.overlap_percent || DEFAULT_OVERLAP_PERCENT;
+  let fragment_size = payload.fragment_size || DEFAULT_FRAGMENT_SIZE;
   const index = payload.index || "";
+  let characters_to_tokens_ratio = payload.characters_to_tokens_ratio;
+  if (fragment_size == 0) {
+    fragment_size = 2048;
+  }
+  let chunk_size = Math.floor(fragment_size / (1 + overlap_percent)) * 0.9;
+  if (characters_to_tokens_ratio == 0)
+    characters_to_tokens_ratio = 4.7;
+  let chunk_overlap = Math.floor(chunk_size * overlap_percent);
+  if (chunk_overlap < 0)
+    throw new Error(`ERROR: chunk_overlap < 0`);
+  if (chunk_overlap >= chunk_size)
+    throw new Error(`ERROR: chunk_overlap >= chunk_size`);
+  if (chunk_size <= 0)
+    throw new Error(`ERROR: chunk_size <= 0`);
+  if (characters_to_tokens_ratio <= 0)
+    throw new Error(`ERROR: characters_to_tokens_ratio <= 0`);
   const hasher = initialize_hasher(hasher_model);
+  if (splitter_model != SPLITTER_MODEL_TOKEN) {
+    const old_chunk_size = chunk_size;
+    chunk_size = Math.floor(old_chunk_size * characters_to_tokens_ratio);
+    chunk_overlap = Math.floor(old_chunk_size * overlap_percent * characters_to_tokens_ratio);
+    info += `Splitter is not token based. Based on characters_to_tokens_ratio = ${characters_to_tokens_ratio}, adjusting chunk_size to ${chunk_size} and chunk_overlap to ${chunk_overlap} 
+`;
+  } else {
+    info += `Splitter is token based. chunk_size = ${chunk_size} and chunk_overlap = ${chunk_overlap} 
+`;
+  }
   const splitter = initializeSplitter(splitter_model, chunk_size, chunk_overlap);
   const embedder = await initializeEmbedder(ctx);
   const all_indexes = await loadIndexes(ctx);
@@ -8013,8 +8097,10 @@ async function indexDocuments_function(payload, ctx) {
       indexed_document_chunks = await chunkText(ctx, document_id, document_text, hasher, embedder, splitter, countTokensFunction);
       if (!indexed_document_chunks)
         throw new Error(`ERROR: could not chunk text in document #${document_number}, id:${document_id}`);
-      const token_to_chunking_size_ratio = computeTokenToChunkingSizeRatio(indexed_document_chunks, chunk_size, chunk_overlap);
-      indexed_document_cdn = await saveIndexedDocument(ctx, document_id, indexed_document_chunks, chunk_size, chunk_overlap, token_to_chunking_size_ratio, splitter_model);
+      const ratio = computeCharacterToTokenRatio(indexed_document_chunks);
+      info += `Actual CharacterToToken Ratio = ${ratio} 
+`;
+      indexed_document_cdn = await saveIndexedDocument(ctx, document_id, indexed_document_chunks, chunk_size, chunk_overlap, ratio, splitter_model);
     } else {
       const document_info = await getIndexedDocumentInfoFromCdn(ctx, indexed_document_cdn);
       if (!document_info)
@@ -8047,101 +8133,102 @@ async function indexDocuments_function(payload, ctx) {
 }
 
 // component_QueryIndexBruteforce.js
-import { createComponent as createComponent2, is_valid as is_valid6, sanitizeJSON, combineStringsWithoutOverlap, queryLlmByModelId, getLlmChoices, getModelMaxSize, getModelNameAndProviderFromId } from "../../../src/utils/omni-utils.js";
-var NAMESPACE2 = "document_processing";
-var OPERATION_ID2 = "query_index_bruteforce";
-var TITLE2 = "Query Index (Brute Force)";
-var DESCRIPTION2 = "Run a LLM on an array of documents, one fragment at a time, and return the results in an array";
-var SUMMARY2 = DESCRIPTION2;
-var CATEGORY2 = "document processing";
+import { createComponent as createComponent2, sanitizeJSON, queryLlmByModelId, getLlmChoices as getLlmChoices2 } from "../../../src/utils/omni-utils.js";
+var NAMESPACE = "document_processing";
+var OPERATION_ID = "query_index_bruteforce";
+var TITLE = "Query Index (Brute Force)";
+var DESCRIPTION = "Run a LLM on an array of documents, one fragment at a time, and return the results in an array";
+var SUMMARY = DESCRIPTION;
+var CATEGORY = "document processing";
 async function async_getQueryIndexBruteforceComponent() {
-  const llm_choices = await getLlmChoices();
-  const links3 = {};
-  const inputs3 = [
+  const llm_choices = await getLlmChoices2();
+  const links2 = {};
+  const inputs2 = [
     { name: "indexed_documents", type: "array", customSocket: "documentArray", description: "Documents to be processed" },
     { name: "query", type: "string", description: "The query", customSocket: "text" },
-    { name: "temperature", type: "number", defaultValue: 0 },
+    { name: "temperature", type: "number", defaultValue: 0, minimum: 0, maximum: 1, step: 0.1, description: "The temperature to use for the LLM" },
     { name: "model_id", title: "model", type: "string", defaultValue: "gpt-3.5-turbo-16k|openai", choices: llm_choices },
     { name: "index", title: "Read from Index:", type: "string", description: "All indexed documents sharing the same Index will be grouped and queried together" },
     { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 1e5], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
-    { name: "llm_args", type: "object", customSocket: "object", description: "Extra arguments provided to the LLM" }
+    { name: "llm_args", type: "object", customSocket: "object", description: "Extra arguments provided to the LLM" },
+    { name: "tokens_per_minutes", type: "number", defaultValue: 4e4, minimum: 0, maximum: 2e5, description: "If set > 0, the TPM (token per minute) limit. Useful for openai and other services with rate limits. 0 disable this rate limitation." },
+    { name: "requests_per_minutes", type: "number", defaultValue: 500, minimum: 0, maximum: 2e5, description: "If set > 0, the RPM (request per minute) limit. Useful for openai and other services with rate limits. 0 disable this rate limitation. DO NOT USE openai endpoints at the same time as this recipe for this to be accurate." }
   ];
-  const outputs3 = [
+  const outputs2 = [
     { name: "answer", type: "string", customSocket: "text", description: "The answer to the query or prompt", title: "Answer" },
     { name: "json", type: "object", customSocket: "object", description: "The answer in json format, with possibly extra arguments returned by the LLM", title: "Json" },
     { name: "info", type: "string", customSocket: "text", description: "Information about the block's operation" }
   ];
-  const controls3 = null;
-  const component = createComponent2(NAMESPACE2, OPERATION_ID2, TITLE2, CATEGORY2, DESCRIPTION2, SUMMARY2, links3, inputs3, outputs3, controls3, queryIndexBruteforce);
+  const controls2 = null;
+  const component = createComponent2(NAMESPACE, OPERATION_ID, TITLE, CATEGORY, DESCRIPTION, SUMMARY, links2, inputs2, outputs2, controls2, queryIndexBruteforce);
   return component;
 }
 async function queryIndexBruteforce(payload, ctx) {
   console.time("queryIndexBruteforce");
+  let info = "queryIndexBruteforce.\n|";
+  let max_tokens_per_minutes = payload.tokens_per_minutes;
+  let max_requests_per_minutes = payload.requests_per_minutes;
+  if (!max_tokens_per_minutes || max_tokens_per_minutes <= 0) {
+    max_tokens_per_minutes = Number.MAX_SAFE_INTEGER;
+    info += `No token limit.  
+|`;
+  }
+  if (!max_requests_per_minutes || max_requests_per_minutes <= 0) {
+    max_requests_per_minutes = Number.MAX_SAFE_INTEGER;
+    info += `No request limit.  
+|`;
+  }
+  let tokensUsed = 0;
+  let queriesMade = 0;
+  let startTime = Date.now();
   const indexed_documents = payload.indexed_documents;
   const index = payload.index;
-  const all_indexes = await loadIndexes(ctx);
   const query = payload.query;
   const temperature = payload.temperature;
   const model_id = payload.model_id;
   let context_size = payload.context_size;
   const llm_args = payload.llm_args;
-  let info = "";
-  if (context_size == 0) {
-    const splits = getModelNameAndProviderFromId(model_id);
-    const model_name = splits.model_name;
-    context_size = getModelMaxSize(model_name, false) * 0.9;
-  }
-  const max_size = context_size * 0.9;
+  const max_size = getModelMaxSizeFromModelId(context_size, model_id);
   info += `Using a max_size of ${max_size} tokens.  
 |`;
-  const chunks = await getChunksFromIndexAndIndexedDocuments(ctx, all_indexes, index, indexed_documents);
-  let chunk_index = 0;
-  let total_token_cost = 0;
-  let combined_text = "";
+  const all_chunks = await getChunksFromIndexAndIndexedDocuments(ctx, index, indexed_documents);
+  const blocks_result = await createChunkBlocks(ctx, max_size, all_chunks, info);
+  const blocks = blocks_result.blocks;
+  info += blocks_result.info;
   const instruction = "Based on the user's prompt, answer the following question to the best of your abilities: " + query;
-  const blocks = [];
-  for (const chunk of chunks) {
-    const is_last_index = chunk_index == chunks.length - 1;
-    const chunk_text = chunk?.text;
-    const chunk_id = chunk?.id;
-    const token_cost = chunk.token_count;
-    const can_fit = total_token_cost + token_cost <= max_size;
-    if (can_fit) {
-      combined_text = combineStringsWithoutOverlap(combined_text, chunk_text);
-      total_token_cost += token_cost;
-      info += `Combining chunks.  chunk_id: ${chunk_id}, Token cost: ${total_token_cost}.  
-|`;
-    } else {
-      blocks.push(combined_text);
-      combined_text = chunk_text;
-      total_token_cost = token_cost;
+  const llm_results = [];
+  for (let block_index = 0; block_index < blocks.length; block_index++) {
+    const block = blocks[block_index];
+    const block_token_cost = block.token_cost * 1.2;
+    const block_text = block.text;
+    if (tokensUsed + block_token_cost > max_tokens_per_minutes || queriesMade + 1 > max_requests_per_minutes) {
+      let timePassed = Date.now() - startTime;
+      let timeToWait = 6e4 - timePassed;
+      await sleep(timeToWait);
+      tokensUsed = 0;
+      queriesMade = 0;
+      startTime = Date.now();
     }
-    if (is_last_index) {
-      blocks.push(combined_text);
-    }
-    chunk_index += 1;
+    const llm_result = await processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, block_index + 1, blocks.length);
+    llm_results.push(llm_result);
+    tokensUsed += block_token_cost;
+    queriesMade++;
   }
-  makeToast(ctx, `Processing ${blocks.length} blocks`);
-  const promises = blocks.map(
-    (block_text, index2) => processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, index2 + 1, blocks.length)
-  );
-  const llm_results = await Promise.all(promises);
   let answer = "";
-  llm_results.forEach((partial_result, index2) => {
+  for (const partial_result of llm_results) {
     const text = partial_result.text;
     if (text && text.length > 0) {
       answer += text + "   \n\n";
       info += `Answer: ${text}.  
 |`;
     }
-  });
+  }
   const json = { "answers": llm_results };
   const response = { result: { "ok": true }, answer, json, info };
   console.timeEnd("queryIndexBruteforce");
   return response;
 }
 async function processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, block_index, block_count) {
-  await sleep(1e3 * block_index);
   makeToast(ctx, `Queuing up Block #${block_index}/${block_count}`);
   const results = await queryLlmByModelId(ctx, block_text, instruction, model_id, temperature, llm_args);
   const sanetized_results = sanitizeJSON(results);
@@ -8156,17 +8243,17 @@ ${text}`);
 
 // component_QueryIndex.js
 import { createComponent as createComponent3 } from "../../../src/utils/omni-utils.js";
-import { getLlmChoices as getLlmChoices2, is_valid as is_valid8, getModelMaxSize as getModelMaxSize3, getModelNameAndProviderFromId as getModelNameAndProviderFromId3, DEFAULT_LLM_MODEL_ID } from "../../../src/utils/omni-utils.js";
+import { getLlmChoices as getLlmChoices3, is_valid as is_valid7, getModelMaxSize as getModelMaxSize3, getModelNameAndProviderFromId as getModelNameAndProviderFromId3, DEFAULT_LLM_MODEL_ID } from "../../../src/utils/omni-utils.js";
 
 // smartquery.js
-import { queryLlmByModelId as queryLlmByModelId2, getModelMaxSize as getModelMaxSize2, console_log as console_log5, console_warn, is_valid as is_valid7, getModelNameAndProviderFromId as getModelNameAndProviderFromId2 } from "../../../src/utils/omni-utils.js";
+import { queryLlmByModelId as queryLlmByModelId2, getModelMaxSize as getModelMaxSize2, console_log as console_log5, console_warn, is_valid as is_valid6, getModelNameAndProviderFromId as getModelNameAndProviderFromId2 } from "../../../src/utils/omni-utils.js";
 async function smartqueryFromVectorstore(ctx, vectorstore, query, embedder, model_id, max_size, provide_citation) {
   let info = "";
   const splits = getModelNameAndProviderFromId2(model_id);
   const model_name = splits.model_name;
   info += `smartquery: model_name = ${model_name}
 |  `;
-  if (is_valid7(query) == false)
+  if (is_valid6(query) == false)
     throw new Error(`ERROR: query is invalid`);
   let vectorstore_responses = await queryVectorstore(vectorstore, query, 10, embedder);
   let total_tokens = 0;
@@ -8227,7 +8314,7 @@ User's question: ${query}`;
 |  `;
   const response = await queryLlmByModelId2(ctx, prompt, instruction, model_id);
   const answer = response?.answer_text || null;
-  if (is_valid7(answer) == false)
+  if (is_valid6(answer) == false)
     throw new Error(`ERROR: query_answer is invalid`);
   console_warn(`instruction = 
 ${instruction}`);
@@ -8237,20 +8324,20 @@ ${prompt}`);
 }
 
 // component_QueryIndex.js
-var NAMESPACE3 = "document_processing";
-var OPERATION_ID3 = "query_index";
-var TITLE3 = "Query Index (Smart)";
-var DESCRIPTION3 = "Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain";
-var SUMMARY3 = "Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain";
-var CATEGORY3 = "document processing";
+var NAMESPACE2 = "document_processing";
+var OPERATION_ID2 = "query_index";
+var TITLE2 = "Query Index (Smart)";
+var DESCRIPTION2 = "Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain";
+var SUMMARY2 = "Answer the Query using all document in the given Index, using OpenAI embeddings and Langchain";
+var CATEGORY2 = "document processing";
 async function async_getQueryIndexComponent() {
-  const links3 = {
+  const links2 = {
     "Langchainjs Website": "https://docs.langchain.com/docs/",
     "Documentation": "https://js.langchain.com/docs/",
     "Langchainjs Github": "https://github.com/hwchase17/langchainjs"
   };
-  const llm_choices = await getLlmChoices2();
-  const inputs3 = [
+  const llm_choices = await getLlmChoices3();
+  const inputs2 = [
     { name: "query", type: "string", customSocket: "text" },
     { name: "indexed_documents", title: "Indexed Documents to Query", type: "array", customSocket: "documentArray", description: "Documents to be directly queried instead of being passed as an Index", allowMultiple: true },
     { name: "model_id", type: "string", defaultValue: DEFAULT_LLM_MODEL_ID, choices: llm_choices },
@@ -8258,12 +8345,12 @@ async function async_getQueryIndexComponent() {
     { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 1e5], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
     { name: "provide_citation", type: "boolean", defaultValue: false }
   ];
-  const outputs3 = [
+  const outputs2 = [
     { name: "answer", type: "string", customSocket: "text", description: "The answer to the query", title: "Answer" },
     { name: "info", type: "string", customSocket: "text", description: "Information about the block's operation" }
   ];
-  const controls3 = null;
-  const component = createComponent3(NAMESPACE3, OPERATION_ID3, TITLE3, CATEGORY3, DESCRIPTION3, SUMMARY3, links3, inputs3, outputs3, controls3, queryIndex);
+  const controls2 = null;
+  const component = createComponent3(NAMESPACE2, OPERATION_ID2, TITLE2, CATEGORY2, DESCRIPTION2, SUMMARY2, links2, inputs2, outputs2, controls2, queryIndex);
   return component;
 }
 async function queryIndex(payload, ctx) {
@@ -8286,20 +8373,8 @@ async function queryIndex(payload, ctx) {
   const embedder = await initializeEmbedder(ctx);
   if (!embedder)
     throw new Error(`Cannot initialize embedded`);
-  const all_indexes = await loadIndexes(ctx);
-  if (!all_indexes)
-    throw new Error(`[query_chunks_component] Error loading indexes`);
-  if (!index || index == "") {
-    info += `WARNING: No index used.
-|  `;
-    if (!is_valid8(indexed_documents))
-      throw new Error(`Without passing an index, you need to pass at least one document to query`);
-  } else {
-    if (index in all_indexes == false)
-      throw new Error(`Index ${index} not found in indexes`);
-  }
-  const all_chunks = await getChunksFromIndexAndIndexedDocuments(ctx, all_indexes, index, indexed_documents);
-  if (!is_valid8(all_chunks))
+  const all_chunks = await getChunksFromIndexAndIndexedDocuments(ctx, index, indexed_documents);
+  if (!is_valid7(all_chunks))
     throw new Error(`No fragments returned from index ${index} or documents ${indexed_documents}`);
   const vectorstore = await createVectorstoreFromChunks(all_chunks, embedder);
   if (!vectorstore)
@@ -8314,20 +8389,20 @@ async function queryIndex(payload, ctx) {
 
 // component_GetDocumentsIndexes.js
 import { createComponent as createComponent4 } from "../../../src/utils/omni-utils.js";
-var NAMESPACE4 = "document_processing";
-var OPERATION_ID4 = "get_documents_indexes";
-var TITLE4 = "Get Documents Indexes";
-var DESCRIPTION4 = "Get information about the non-empty Indexes currently present";
-var SUMMARY4 = "Get information about the non-empty Indexes currently present";
-var CATEGORY4 = "document processing";
-var inputs2 = [];
-var outputs2 = [
+var NAMESPACE3 = "document_processing";
+var OPERATION_ID3 = "get_documents_indexes";
+var TITLE3 = "Get Documents Indexes";
+var DESCRIPTION3 = "Get information about the non-empty Indexes currently present";
+var SUMMARY3 = "Get information about the non-empty Indexes currently present";
+var CATEGORY3 = "document processing";
+var inputs = [];
+var outputs = [
   { name: "indexes", type: "array", description: "An array of all the Index names in the database" },
   { name: "info", type: "string", description: "Info on all the indexes in the database" }
 ];
-var links2 = {};
-var controls2 = null;
-var DocumentsIndexesComponent = createComponent4(NAMESPACE4, OPERATION_ID4, TITLE4, CATEGORY4, DESCRIPTION4, SUMMARY4, links2, inputs2, outputs2, controls2, getDocumentsIndexes_function);
+var links = {};
+var controls = null;
+var DocumentsIndexesComponent = createComponent4(NAMESPACE3, OPERATION_ID3, TITLE3, CATEGORY3, DESCRIPTION3, SUMMARY3, links, inputs, outputs, controls, getDocumentsIndexes_function);
 async function getDocumentsIndexes_function(payload, ctx) {
   console.time("getDocumentsIndexes_function");
   let indexes_info = await getDocumentsIndexes(ctx);
@@ -8350,6 +8425,7 @@ async function getDocumentsIndexes_function(payload, ctx) {
 async function CreateComponents() {
   const LoopGPTComponent = await async_getQueryIndexBruteforceComponent();
   const QueryIndexComponent = await async_getQueryIndexComponent();
+  const IndexDocumentsComponent = await async_getIndexComponent();
   const components = [
     IndexDocumentsComponent,
     LoopGPTComponent,

@@ -4,9 +4,10 @@
  */
 
 //@ts-check
-import { createComponent, is_valid, sanitizeJSON, combineStringsWithoutOverlap, queryLlmByModelId, getLlmChoices, getModelMaxSize, getModelNameAndProviderFromId } from '../../../src/utils/omni-utils.js';
-import { getChunksFromIndexAndIndexedDocuments, loadIndexes } from './omnilib-docs/vectorstore.js';
-import { makeToast, sleep } from './omnilib-docs/toast.js';
+import { createComponent, sanitizeJSON, queryLlmByModelId, getLlmChoices } from '../../../src/utils/omni-utils.js';
+import { createChunkBlocks } from './omnilib-docs/chunking.js';
+import { getChunksFromIndexAndIndexedDocuments } from './omnilib-docs/vectorstore.js';
+import { makeToast, sleep, getModelMaxSizeFromModelId, } from './omnilib-docs/utilities.js';
 const NAMESPACE = 'document_processing';;
 const OPERATION_ID = 'query_index_bruteforce';
 const TITLE = 'Query Index (Brute Force)';
@@ -25,11 +26,13 @@ async function async_getQueryIndexBruteforceComponent()
     const inputs = [
         { name: 'indexed_documents', type: 'array', customSocket: 'documentArray', description: 'Documents to be processed' },
         { name: 'query', type: 'string', description: 'The query', customSocket: 'text' },
-        { name: 'temperature', type: 'number', defaultValue: 0 },
+        { name: "temperature", type: "number", defaultValue: 0, minimum: 0, maximum: 1, step: 0.1, description: "The temperature to use for the LLM" },
         { name: 'model_id', title: 'model', type: 'string', defaultValue: 'gpt-3.5-turbo-16k|openai', choices: llm_choices },
         { name: 'index', title: 'Read from Index:', type: 'string', description: "All indexed documents sharing the same Index will be grouped and queried together" },
         { name: 'context_size', type: 'number', defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 100000], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
         { name: 'llm_args', type: 'object', customSocket: 'object', description: 'Extra arguments provided to the LLM' },
+        { name: 'tokens_per_minutes', type: 'number', defaultValue: 40000, minimum:0, maximum: 200000, description: "If set > 0, the TPM (token per minute) limit. Useful for openai and other services with rate limits. 0 disable this rate limitation." },
+        { name: 'requests_per_minutes', type: 'number', defaultValue: 500, minimum:0, maximum: 200000, description: "If set > 0, the RPM (request per minute) limit. Useful for openai and other services with rate limits. 0 disable this rate limitation. DO NOT USE openai endpoints at the same time as this recipe for this to be accurate." },
     ];
 
     const outputs = [
@@ -47,11 +50,27 @@ async function async_getQueryIndexBruteforceComponent()
 async function queryIndexBruteforce(payload, ctx)
 {
     console.time("queryIndexBruteforce");
+    let info = "queryIndexBruteforce.\n|";
 
+    let max_tokens_per_minutes = payload.tokens_per_minutes;
+    let max_requests_per_minutes = payload.requests_per_minutes;
+    if (!max_tokens_per_minutes || max_tokens_per_minutes <= 0) 
+    {
+        max_tokens_per_minutes = Number.MAX_SAFE_INTEGER;
+        info += `No token limit.  \n|`;
+    }
+    if (!max_requests_per_minutes || max_requests_per_minutes <= 0) 
+    {
+        max_requests_per_minutes = Number.MAX_SAFE_INTEGER;
+        info += `No request limit.  \n|`;
+    }
+
+    let tokensUsed = 0;
+    let queriesMade = 0;
+    let startTime = Date.now();
 
     const indexed_documents = payload.indexed_documents;
     const index = payload.index;
-    const all_indexes = await loadIndexes(ctx);
 
     const query = payload.query;
     const temperature = payload.temperature;
@@ -59,65 +78,50 @@ async function queryIndexBruteforce(payload, ctx)
     let context_size = payload.context_size;
     const llm_args = payload.llm_args;
 
-    let info = "";
-
-    if (context_size == 0) 
-    {
-        const splits = getModelNameAndProviderFromId(model_id);
-        const model_name = splits.model_name;
-        context_size = getModelMaxSize(model_name, false) * 0.9;
-    }
-    const max_size = context_size * 0.9; // we use some margin
+    const max_size = getModelMaxSizeFromModelId(context_size, model_id);
     info += `Using a max_size of ${max_size} tokens.  \n|`;
+  
+    const all_chunks = await getChunksFromIndexAndIndexedDocuments(ctx, index, indexed_documents);
+    const blocks_result = await createChunkBlocks(ctx, max_size, all_chunks, info);
+    const blocks = blocks_result.blocks;
+    info += blocks_result.info;
 
-    const chunks = await getChunksFromIndexAndIndexedDocuments(ctx, all_indexes, index, indexed_documents);
-
-    let chunk_index = 0;
-    let total_token_cost = 0;
-    let combined_text = "";
     const instruction = "Based on the user's prompt, answer the following question to the best of your abilities: " + query;
-    const blocks = [];
-    for (const chunk of chunks)
-    {
-        const is_last_index = (chunk_index == chunks.length - 1);
+    //const promises = [];
+    const llm_results = [];
 
-        const chunk_text = chunk?.text;
-        const chunk_id = chunk?.id;
+    for (let block_index = 0; block_index < blocks.length; block_index++) {
+        const block = blocks[block_index];
+        const block_token_cost = block.token_cost * 1.2; // we use some margin due to other tokens in the instruction
+        const block_text = block.text;
 
-        const token_cost = chunk.token_count;
-        const can_fit = (total_token_cost + token_cost <= max_size);
+        // Check if the next query will exceed the budgets
+        if (tokensUsed + block_token_cost > max_tokens_per_minutes || queriesMade + 1 > max_requests_per_minutes) {
+            // Calculate how much time to wait before making the next query
+            let timePassed = Date.now() - startTime;
+            let timeToWait = 60000 - timePassed; // Wait for the remainder of the minute
+            await sleep(timeToWait);
 
-        if (can_fit)
-        {
-            combined_text = combineStringsWithoutOverlap(combined_text, chunk_text);
-            total_token_cost += token_cost; // TBD: this is not accurate because we are not counting the tokens in the overlap or the instructions
-            info += `Combining chunks.  chunk_id: ${chunk_id}, Token cost: ${total_token_cost}.  \n|`;
-        }
-        else
-        {
-            blocks.push(combined_text);
-            combined_text = chunk_text;
-            total_token_cost = token_cost;
+            // Reset tracking variables
+            tokensUsed = 0;
+            queriesMade = 0;
+            startTime = Date.now();
         }
 
-        if (is_last_index)
-        {
-            blocks.push(combined_text);
-        }
-
-        chunk_index += 1;
+        // Proceed with the query
+        const llm_result = await processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, block_index + 1, blocks.length);
+        llm_results.push(llm_result);
+        
+        // Update tracking variables
+        tokensUsed += block_token_cost;
+        queriesMade++;
     }
 
-    makeToast(ctx, `Processing ${blocks.length} blocks`);
-    const promises = blocks.map((block_text, index) =>
-        processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, index + 1, blocks.length)
-    );
-
-    const llm_results = await Promise.all(promises);
+    //const llm_results = await Promise.all(promises);
+    //llm_results.forEach((partial_result, index) =>
 
     let answer = "";
-
-    llm_results.forEach((partial_result, index) =>
+    for (const partial_result of llm_results)
     {
         const text = partial_result.text;
         if (text && text.length > 0)
@@ -125,7 +129,7 @@ async function queryIndexBruteforce(payload, ctx)
             answer += text + "   \n\n";
             info += `Answer: ${text}.  \n|`;
         }
-    });
+    }
 
     const json = { 'answers': llm_results };
 
@@ -137,7 +141,6 @@ async function queryIndexBruteforce(payload, ctx)
 
 async function processBlock(ctx, block_text, instruction, model_id, temperature, llm_args, block_index, block_count) {
     // Introduce a delay before making the request
-    await sleep(1000 * block_index); // waits for block_index seconds
     makeToast(ctx, `Queuing up Block #${block_index}/${block_count}`);
 
     const results = await queryLlmByModelId(ctx, block_text, instruction, model_id, temperature, llm_args);
@@ -150,8 +153,6 @@ async function processBlock(ctx, block_text, instruction, model_id, temperature,
 
     return { text, function_arguments_string, function_arguments };
 }
-
-
 
 
 

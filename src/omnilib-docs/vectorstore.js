@@ -197,24 +197,27 @@ export async function getIndexedDocumentInfoFromCdn(ctx, document_cdn)
   return document_info;
 }
 
-export async function getChunksFromIndexAndIndexedDocuments(ctx, indexes, index, indexed_documents)
+export async function getChunksFromIndexAndIndexedDocuments(ctx, index, indexed_documents)
 {
-  let all_chunks = [];
+    const indexes = await loadIndexes(ctx);
+    if (!indexes) throw new Error(`ERROR: could not load indexes from DB`);
 
-  let indexed_document_cdns = [];
-  if (index && index != "") indexed_document_cdns = readCdnsFromIndex(indexes, index);
-  if (indexed_documents && Array.isArray(indexed_documents) && indexed_documents.length > 0) indexed_document_cdns = indexed_document_cdns.concat(indexed_documents);
-  if (!indexed_document_cdns || Array.isArray(indexed_document_cdns) == false) throw new Error(`Error no documents passed either as an Index or directly.`);
+    let all_chunks = [];
 
-  for (const indexed_document_cdn of indexed_document_cdns)  
-  {
-    const document_info = await getIndexedDocumentInfoFromCdn(ctx, indexed_document_cdn);
-    if (!document_info) throw new Error(`ERROR: could not get document_info from cdn ${JSON.stringify(indexed_document_cdn)}`);
+    let indexed_document_cdns = [];
+    if (index && index != "") indexed_document_cdns = readCdnsFromIndex(indexes, index);
+    if (indexed_documents && Array.isArray(indexed_documents) && indexed_documents.length > 0) indexed_document_cdns = indexed_document_cdns.concat(indexed_documents);
+    if (!indexed_document_cdns || Array.isArray(indexed_document_cdns) == false) throw new Error(`Error no documents passed either as an Index or directly.`);
 
-    const indexed_document_chunks = document_info.chunks;
-    if (!indexed_document_chunks || Array.isArray(indexed_document_chunks) == false || indexed_document_chunks.length == 0) continue;
-    all_chunks = all_chunks.concat(indexed_document_chunks);
-  }
+    for (const indexed_document_cdn of indexed_document_cdns)  
+    {
+        const document_info = await getIndexedDocumentInfoFromCdn(ctx, indexed_document_cdn);
+        if (!document_info) throw new Error(`ERROR: could not get document_info from cdn ${JSON.stringify(indexed_document_cdn)}`);
+
+        const indexed_document_chunks = document_info.chunks;
+        if (!indexed_document_chunks || Array.isArray(indexed_document_chunks) == false || indexed_document_chunks.length == 0) continue;
+        all_chunks = all_chunks.concat(indexed_document_chunks);
+    }
 
   return all_chunks;
 }

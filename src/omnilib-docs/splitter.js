@@ -2,7 +2,6 @@
 
 import { TokenTextSplitter } from "langchain/text_splitter";
 import { SupportedTextSplitterLanguages, RecursiveCharacterTextSplitter } from "langchain/text_splitter";
-import { DEFAULT_CHUNK_SIZE, DEFAULT_CHUNK_OVERLAP } from "./chunking.js";
 
 const SPLITTER_MODEL_RECURSIVE = "RecursiveCharacterTextSplitter";
 const SPLITTER_MODEL_TOKEN = "TokenTextSplitter";
@@ -58,7 +57,7 @@ function extractCodeLanguage(str)
     return null;
 }
 
-function initializeSplitter(splitter_model = DEFAULT_SPLITTER_MODEL, chunk_size = DEFAULT_CHUNK_SIZE, chunk_overlap = DEFAULT_CHUNK_OVERLAP)
+function initializeSplitter(splitter_model = DEFAULT_SPLITTER_MODEL, chunk_size, chunk_overlap)
 {
 
     let splitter = null;
@@ -95,4 +94,4 @@ function initializeSplitter(splitter_model = DEFAULT_SPLITTER_MODEL, chunk_size 
     return splitter;
 }
 
-export { initializeSplitter, DEFAULT_SPLITTER_MODEL }
+export { initializeSplitter, DEFAULT_SPLITTER_MODEL, SPLITTER_MODEL_TOKEN }
