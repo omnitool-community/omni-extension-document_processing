@@ -34,7 +34,7 @@ async function async_getQueryIndexComponent()
     { name: 'indexed_documents', title: 'Indexed Documents to Query', type: 'array', customSocket: 'documentArray', description: 'Documents to be directly queried instead of being passed as an Index', allowMultiple: true },
     { name: 'model_id', type: 'string', defaultValue: DEFAULT_LLM_MODEL_ID, choices: llm_choices },
     { name: 'index', title: `Read from Index:`, type: 'string', description: "All indexed documents sharing the same Index will be grouped and queried together" },
-    { name: 'context_size', type: 'number', defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 65536, 131072], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
+    { name: 'context_size', type: 'number', defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16385, 32768, 65536, 128000], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
     { name: 'provide_citation', type: 'boolean', defaultValue: false},
   ];
 
