@@ -8149,7 +8149,7 @@ async function async_getQueryIndexBruteforceComponent() {
     { name: "temperature", type: "number", defaultValue: 0, minimum: 0, maximum: 1, step: 0.1, description: "The temperature to use for the LLM" },
     { name: "model_id", title: "model", type: "string", defaultValue: "gpt-3.5-turbo-16k|openai", choices: llm_choices },
     { name: "index", title: "Read from Index:", type: "string", description: "All indexed documents sharing the same Index will be grouped and queried together" },
-    { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 1e5], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
+    { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16385, 32768, 65536, 12800], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
     { name: "llm_args", type: "object", customSocket: "object", description: "Extra arguments provided to the LLM" },
     { name: "tokens_per_minutes", type: "number", defaultValue: 4e4, minimum: 0, maximum: 2e5, description: "If set > 0, the TPM (token per minute) limit. Useful for openai and other services with rate limits. 0 disable this rate limitation." },
     { name: "requests_per_minutes", type: "number", defaultValue: 500, minimum: 0, maximum: 2e5, description: "If set > 0, the RPM (request per minute) limit. Useful for openai and other services with rate limits. 0 disable this rate limitation. DO NOT USE openai endpoints at the same time as this recipe for this to be accurate." }
@@ -8342,7 +8342,7 @@ async function async_getQueryIndexComponent() {
     { name: "indexed_documents", title: "Indexed Documents to Query", type: "array", customSocket: "documentArray", description: "Documents to be directly queried instead of being passed as an Index", allowMultiple: true },
     { name: "model_id", type: "string", defaultValue: DEFAULT_LLM_MODEL_ID, choices: llm_choices },
     { name: "index", title: `Read from Index:`, type: "string", description: "All indexed documents sharing the same Index will be grouped and queried together" },
-    { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16384, 32768, 1e5], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
+    { name: "context_size", type: "number", defaultValue: 4096, choices: [0, 2048, 4096, 8192, 16385, 32768, 65536, 128e3], description: "If set > 0, the size of the context window (in token) to use to process the query. If 0, try to use the model max_size automatically." },
     { name: "provide_citation", type: "boolean", defaultValue: false }
   ];
   const outputs2 = [
